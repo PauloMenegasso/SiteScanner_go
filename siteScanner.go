@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,7 +29,7 @@ func main() {
 		case 1:
 			startMonitoring(sites)
 		case 2:
-			fmt.Println("Showing the logs:")
+			printLogs()
 		case 0:
 			fmt.Println("Closing the program.")
 			fmt.Println("Thanks for using.")
@@ -78,10 +83,16 @@ func startMonitoring(sites []string) {
 }
 
 func testSite(site string) {
-	resp, _ := http.Get(site)
-	fmt.Println("Site:", site, " . Status Code:", resp.StatusCode)
+	resp, err := http.Get(site)
+	logError(err)
 
-	if resp.StatusCode != 200 {
+	statusCode := resp.StatusCode
+
+	fmt.Println("Site:", site, " . Status Code:", statusCode)
+
+	createLogFile(site, statusCode)
+
+	if statusCode != 200 {
 		fmt.Println("Atenção, site", site, "está com problemas!")
 	}
 }
@@ -89,7 +100,52 @@ func testSite(site string) {
 func readFile() []string {
 	var sites []string
 
-	file, _ := os.ReadFile("sites.txt")
-	fmt.Println(file)
+	file, err := os.Open("sites.txt")
+	logError(err)
+
+	reader := bufio.NewReader(file)
+
+	for {
+		line, err := reader.ReadString('\n')
+		logError(err)
+
+		line = strings.TrimSpace(line)
+
+		sites = append(sites, line)
+
+		if err == io.EOF {
+			break
+		}
+	}
+
+	file.Close()
+
 	return sites
+}
+
+func createLogFile(site string, statusCode int) {
+	file, err := os.OpenFile("logs.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	logError(err)
+
+	file.WriteString(time.Now().Format("02/01/2006 15:04:05") + " - Site: " + site + ". Resposta: " + strconv.Itoa(statusCode) + "\n")
+
+	file.Close()
+}
+
+func logError(err error) {
+	if err == io.EOF {
+		return
+	}
+	if err != nil {
+		fmt.Println("Ocorreu um erro:", err)
+	}
+}
+
+func printLogs() {
+	fmt.Println("Showing the logs:")
+
+	arquivo, err := ioutil.ReadFile("logs.txt")
+	logError(err)
+
+	fmt.Println(string(arquivo))
 }
